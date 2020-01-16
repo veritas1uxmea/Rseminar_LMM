@@ -1,0 +1,342 @@
+---
+title: "Dipping toes in Mixed Effects Modelling in R"
+output:
+  html_document:
+    df_print: paged
+---
+
+R markdown tutorial - among thousands of them out there I (almost randomly) picked this one : https://r4ds.had.co.nz/r-markdown.html
+```{r setup}
+library(tidyverse)
+library(viridis)
+library(glue)
+```
+
+press Crtl+Alt+i and see what happens 
+
+I am pretty much repeating what these web resources have to say about Mixed Effects Modelling:
+https://ourcodingclub.github.io/2017/03/15/mixed-models.html
+https://web.stanford.edu/class/psych252/section/Mixed_models_tutorial.html 
+https://cran.r-project.org/web/packages/lme4/vignettes/lmer.pdf
+
+
+### grab the data and take a look
+Crtl+Shift+Enter and see what happens 
+```{r}
+load("dragons.Rdata") 
+head(dragons)
+```
+```{r}
+str(dragons)
+```
+
+
+# First thing first, visualize your data! 
+
+How's your outcome variable look like? 
+```{r}
+dragons %>% 
+  ggplot(.,aes(testScore)) +
+  geom_histogram(aes(y =..density..),alpha = .4)+
+  geom_density(col="firebrick",size=1)+
+  theme_bw()
+```
+
+
+```{r}
+dragons %>% 
+  ggplot(.,aes(x = bodyLength, y = testScore)) +
+  geom_point() +
+  geom_smooth(method = "lm")+
+  theme_bw()
+```
+
+### Linear regression 
+```{r}
+basic.lm <- lm(testScore ~ bodyLength, data = dragons)
+summary(basic.lm)
+```
+
+Is your model good looking?
+```{r}
+qqnorm(resid(basic.lm))
+qqline(resid(basic.lm)) 
+```
+
+
+## Mixed effects modeling 
+
+#### Use facet_wrap(~variable) or facet_grid(variable1~variable2)
+Information we haven't utilize: Mountain range, site 
+
+Again, know your data! 
+```{r}
+table(dragons$site,dragons$mountainRange)
+```
+
+```{r}
+dragons <- dragons %>% 
+  mutate(sampling_site = glue('{mountainRange}_{site}'))
+head(dragons)
+```
+
+
+```{r, fig.width=10}
+dragons %>% 
+  ggplot(.,aes(bodyLength,testScore,col=site))+
+  geom_point()+
+  facet_wrap(~mountainRange,ncol=4)+
+  theme_bw()+
+  scale_color_viridis(discrete = T, option = "C")
+```
+
+Alternatively.
+But I do prefer using facet_wrap()
+```{r}
+dragons %>% 
+  ggplot(.,aes(bodyLength,testScore,col=mountainRange))+
+  geom_point()+
+  geom_smooth(method = "lm", se=FALSE)+
+  theme_bw()+
+  scale_color_viridis(discrete = T, option = "C")
+```
+
+### Linear mixed effect regression 
+We want to tell the model how the data was generated/collected 
+```{r}
+library(lme4)
+```
+
+```{r}
+mixed.intercept <- lmer(testScore ~ bodyLength + (1|mountainRange), data = dragons)
+summary(mixed.intercept) 
+```
+
+A rough rule-of-thumb that the t is probably significant if it’s greater than 2.
+Missing something? Hold one a second 
+
+```{r}
+library(lmerTest)
+summary(mixed.intercept)
+```
+
+```{r}
+qqnorm(resid(mixed.intercept))
+qqline(resid(mixed.intercept)) 
+```
+
+
+```{r}
+plot(mixed.intercept)
+```
+
+## Nested model
+```{r}
+mixed.nested<- lmer(testScore ~ bodyLength + (1|mountainRange)+(1|sampling_site), data = dragons)
+summary(mixed.nested)
+```
+
+lmer function is smart enough to notice that sampling_site is nested under mountainRange,
+but it's always a good practice to write your model like this 
+```{r}
+mixed.nested<- lmer(testScore ~ bodyLength + (1|mountainRange/sampling_site), data = dragons)
+summary(mixed.nested)
+```
+```{r}
+qqnorm(resid(mixed.nested))
+qqline(resid(mixed.nested)) 
+```
+```{r}
+plot(mixed.nested)
+```
+
+AIC=deviance+2∗(p+1) where p is # of parameters 
+```{r}
+anova(mixed.intercept,mixed.nested,refit=FALSE)
+```
+When comparing different random effects: 
+`In lmer(), REML = TRUE (default), 
+`In anova(), refit = FALSE
+
+When comparing different random effects: 
+`In lmer(), REML = FALSE , 
+`In anova(), refit = TRUE (default)
+
+## Plot the model fit
+```{r}
+dragons$fit <-predict(mixed.intercept)
+
+dragons %>% 
+  mutate(fit=predict(mixed.intercept)) %>% 
+  ggplot(.,aes(bodyLength,testScore,group=mountainRange,col=mountainRange))+
+  geom_point(alpha = .3,size=1.5)+
+  theme_bw()+
+  scale_color_viridis(discrete = T,)+
+  geom_line(aes(y=fit),size = 1.2)+
+  labs(x="How long is that bird",
+      y="How smart is that bird",
+      color = "Where is that bird from")+
+  ggtitle("This is why we need to use mixed effects models")
+```
+
+## what do we make out of these results? 
+So, the conclusion is: 
+- you'll probably want to catch an ancient bird from mountain Julian, definitely not from mountain Bavarian or Southern. 
+
+- Body length does NOT have an significant effect on test score. 
+
+- there's something in that mountain varying both body length and test score...! 
+
+# Sleep study 
+The data is included in lme4 package 
+
+```{r}
+head(sleepstudy)
+```
+
+```{r}
+str(sleepstudy) 
+```
+
+
+VISUALIZE
+```{r, fig.width=10,fig.height=3.5}
+sleepstudy %>% 
+  ggplot(.,aes(Days,Reaction))+
+  facet_wrap(~Subject,nrow = 2)+
+  geom_point(shape = 21)+
+  geom_smooth(method = "lm",se = F)+
+  theme_bw()
+```
+```{r}
+sleep.lm <- lm(Reaction ~ Days, sleepstudy)
+summary(sleep.lm)
+```
+
+```{r}
+sleep.intercept <- lmer(Reaction ~ Days + (1| Subject), sleepstudy)
+summary(sleep.intercept)
+```
+
+NOTE: in many cases, models may fail to converge (meaning the model is sh**) when you are trying to fit random slope, because fitting random slope requires a large sample size. 
+
+Don't worry... RED warning message will tell you when it fails to converge. 
+
+Harrison et al., (2018): "fitting the most complex mixed effects structrue allowed by your data by" 
+
+(i) fitting random slopes but removing the correlation between interecepts and slopes
+
+(ii) fitting no random slopes at all but accepting that this inflates the Type I error rate
+```{r}
+sleep.slope <- lmer(Reaction ~ Days + (Days | Subject), sleepstudy)
+summary(sleep.intercept)
+```
+
+
+```{r}
+sleep.slope.no.correlation <- lmer(Reaction ~ Days + ( Days || Subject), sleepstudy)
+summary(sleep.slope.no.correlation)
+```
+
+
+```{r, fig.width=10}
+p1 <- sleepstudy %>% 
+  mutate(pred_dist = fitted(sleep.intercept)) %>% 
+  ggplot(.,aes(Days, pred_dist, col = Subject))+
+  theme_classic()+
+  geom_line(size = 1)+
+  scale_color_viridis(discrete = T,option = "C")
+
+p2 <- sleepstudy %>% 
+  mutate(pred_dist = fitted(sleep.slope)) %>% 
+  ggplot(.,aes(Days, pred_dist, col = Subject))+
+  theme_classic()+
+  geom_line(size = 1)+
+  scale_color_viridis(discrete = T,option = "C")
+
+p3 <- sleepstudy %>% 
+  mutate(pred_dist = fitted(sleep.slope.no.correlation)) %>% 
+  ggplot(.,aes(Days, pred_dist, col = Subject))+
+  theme_classic()+
+  geom_line(size = 1)+
+  scale_color_viridis(discrete = T,option = "C")
+
+gridExtra::grid.arrange(p1,p2,p3,nrow=1)
+
+```
+
+```{r}
+anova(sleep.intercept,sleep.slope, sleep.slope.no.correlation, refit = FALSE)
+```
+
+# Wheels lol
+```{r}
+df <- read.csv("wheels.csv")
+head(df)
+```
+
+```{r}
+df1 <- df %>% 
+  gather(day,rev,2:5) %>% 
+  mutate(day = as.numeric(str_sub(day,4)))
+head(df1)
+```
+
+```{r}
+df1 %>% 
+  ggplot(.,aes(rev))+
+  geom_histogram()
+```
+
+
+```{r}
+df1 %>% 
+  ggplot(.,aes(day,rev, group = id))+
+  geom_line(color = "grey")+
+  geom_line(data = df1 %>% 
+              group_by(strain,day) %>% 
+              summarize(avg = mean(rev,na.rm = T)),
+            aes(day,avg,color=strain,group = strain))+
+  facet_wrap(~strain)+
+  theme_classic()
+```
+
+```{r}
+mod0 <- lmer(rev ~ 1 + (day||id), data = df1, REML = F)
+
+mod1 <- lmer(rev ~ strain*day + (day||id), data = df1, REML = F)
+
+summary(mod1)
+```
+
+```{r}
+plot(mod1)
+```
+
+
+```{r}
+anova(mod0,mod1)
+```
+
+```{r}
+library(MCMCglmm)
+```
+
+```{r}
+df2 <- df1 %>% 
+  mutate(id = as.character(id))
+
+
+mcmc.mod <- MCMCglmm(rev ~ day*strain, 
+                      random = ~idh(day):id,
+                      family = "gaussian",
+                      data = df2,
+                      verbose = F)
+
+summary(mcmc.mod)
+```
+
+```{r}
+plot(mcmc.mod$Sol)
+```
+
