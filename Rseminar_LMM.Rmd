@@ -10,6 +10,7 @@ R markdown tutorial - among thousands of them out there I (almost randomly) pick
 library(tidyverse)
 library(viridis)
 library(glue)
+library(lmerTest)
 ```
 
 press Crtl+Alt+i and see what happens 
@@ -158,7 +159,7 @@ When comparing different random effects:
 `In lmer(), REML = TRUE (default), 
 `In anova(), refit = FALSE
 
-When comparing different random effects: 
+When comparing different fixed effects: 
 `In lmer(), REML = FALSE , 
 `In anova(), refit = TRUE (default)
 
@@ -229,7 +230,7 @@ Harrison et al., (2018): "fitting the most complex mixed effects structrue allow
 (ii) fitting no random slopes at all but accepting that this inflates the Type I error rate
 ```{r}
 sleep.slope <- lmer(Reaction ~ Days + (Days | Subject), sleepstudy)
-summary(sleep.intercept)
+summary(sleep.slope)
 ```
 
 
